@@ -1,0 +1,131 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: diss-postgres
+    environment:
+      POSTGRES_USER: diss
+      POSTGRES_PASSWORD: diss
+      POSTGRES_DB: diss
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diss -d diss"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diss
+
+  mongo:
+    image: mongo:7
+    container_name: diss-mongo
+    volumes:
+      - mongodata:/data/db
+    ports:
+      - "${MONGO_HOST_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    networks:
+      - diss
+
+  redis:
+    image: redis:7-alpine
+    container_name: diss-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - diss
+
+  api:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: diss-api
+    ports:
+      - "${API_HOST_PORT:-3001}:3000"
+    environment:
+      PORT: "3000"
+      PUBLIC_URL: "http://localhost:${API_HOST_PORT:-3001}"
+      DATABASE_URL: postgres://diss:diss@postgres:5432/diss
+      MONGODB_URI: mongodb://mongo:27017/diss
+      REDIS_URL: redis://redis:6379
+      READ_STRATEGY: "${READ_STRATEGY:-race}"
+      METRICS_BUFFER_SIZE: "${METRICS_BUFFER_SIZE:-500}"
+      METRICS_USE_REDIS: "${METRICS_USE_REDIS:-true}"
+      METRICS_QUERY_FROM_REDIS: "${METRICS_QUERY_FROM_REDIS:-true}"
+      METRICS_REDIS_MAX_ENTRIES: "${METRICS_REDIS_MAX_ENTRIES:-5000}"
+      CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:${ADMIN_HOST_PORT:-8080},http://127.0.0.1:${ADMIN_HOST_PORT:-8080}"
+      JWT_SECRET: "${JWT_SECRET:-dev-change-me-please-at-least-32-bytes}"
+      JWT_ACCESS_TTL_SEC: "${JWT_ACCESS_TTL_SEC:-900}"
+      JWT_REFRESH_TTL_SEC: "${JWT_REFRESH_TTL_SEC:-604800}"
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin}"
+      LOAD_TEST_BASE_URL: "http://127.0.0.1:3000"
+      ACCURACY_THRESHOLD: "${ACCURACY_THRESHOLD:-60}"
+      LOAD_TEST_RESULTS_DIR: "/app/data/load-test-results"
+    volumes:
+      - load_test_results:/app/data/load-test-results
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - diss
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: diss-admin
+    ports:
+      - "${ADMIN_HOST_PORT:-8080}:80"
+    depends_on:
+      - api
+    networks:
+      - diss
+
+  k6:
+    image: grafana/k6:latest
+    profiles: ["load"]
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      BASE_URL: "http://api:3000"
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin}"
+      ACCURACY_THRESHOLD: "${ACCURACY_THRESHOLD:-60}"
+    volumes:
+      - ./loadtests:/scripts:ro
+    entrypoint: ["k6"]
+    command: ["run", "/scripts/scenarios/posts-mixed.js"]
+    networks:
+      - diss
+
+volumes:
+  pgdata:
+  mongodata:
+  redisdata:
+  load_test_results:
+
+networks:
+  diss:
+    driver: bridge
