@@ -1,8 +1,8 @@
-# Diss
+# ADMS
 
 Express + TypeScript REST API: PostgreSQL və MongoDB ilə **dual storage**, əvvəlki oxuma müddətlərinə əsaslanan **DecisionEngine**, yazmalarda **primary + background mirror**, oxumada **race** və ya tək DB rejimi, **repository metrikaları**, **HTTP sorğu metrikaları** və **Swagger UI**.
 
-**Redis** eyni anda: sağlamlıq yoxlaması, **metrika saxlama** (`diss:metrics:repo`, `diss:metrics:http` — LPUSH + LTRIM), və **Socket.IO** ilə admin panelə real-time göndərmə üçün istifadə olunur.
+**Redis** eyni anda: sağlamlıq yoxlaması, **metrika saxlama** (`ADMS:metrics:repo`, `ADMS:metrics:http` — LPUSH + LTRIM), və **Socket.IO** ilə admin panelə real-time göndərmə üçün istifadə olunur.
 
 ---
 
@@ -16,7 +16,7 @@ Express + TypeScript REST API: PostgreSQL və MongoDB ilə **dual storage**, əv
 ## Layihə strukturu
 
 ```
-diss-main/
+ADMS-main/
 ├── app/
 │   ├── Dockerfile
 │   ├── package.json
@@ -176,8 +176,8 @@ Admin UI (API artıq işləyəndə): ikinci terminalda `cd admin && npm run dev`
 |---------|--------|---------|
 | `PORT` | Konteyner içi dinləmə portu | `3000` |
 | `PUBLIC_URL` | Swagger üçün server URL (sonunda `/` olmasın) | `http://localhost:<PORT>` |
-| `DATABASE_URL` | PostgreSQL connection string | `postgres://diss:diss@localhost:5432/diss` |
-| `MONGODB_URI` | MongoDB URI | `mongodb://localhost:27017/diss` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgres://ADMS:ADMS@localhost:5432/ADMS` |
+| `MONGODB_URI` | MongoDB URI | `mongodb://localhost:27017/ADMS` |
 | `REDIS_URL` | Redis URI | `redis://localhost:6379` |
 | `READ_STRATEGY` | Oxuma: `race` \| `postgres` \| `mongo` \| `decision` | `race` |
 | `METRICS_BUFFER_SIZE` | Repo + HTTP ring buffer ölçüsü (proses yaddaşı) | `500` |
@@ -220,7 +220,7 @@ CORS: `CORS_ORIGINS` ilə idarə olunur (default Vite + lokal admin portları). 
 
 ## Təhlükəsizlik qeydi
 
-Compose-dakı default PostgreSQL istifadəçi/parol (`diss`) yalnız inkişaf üçündür. İstehsalda güclü parollar, şəbəkə məhdudiyyətləri və sir idarəetməsi tələb olunur.
+Compose-dakı default PostgreSQL istifadəçi/parol (`ADMS`) yalnız inkişaf üçündür. İstehsalda güclü parollar, şəbəkə məhdudiyyətləri və sir idarəetməsi tələb olunur.
 
 ---
 
