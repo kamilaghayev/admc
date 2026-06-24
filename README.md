@@ -224,6 +224,65 @@ Compose-dakı default PostgreSQL istifadəçi/parol (`ADMS`) yalnız inkişaf ü
 
 ---
 
+## Production — Coolify ilə deploy
+
+Layihə [Coolify](https://coolify.io) üçün `docker-compose.prod.yml` ilə hazırlanıb. Lokal `docker-compose.yml` inkişaf üçündür; production-da DB portları xaricə açılmır və məcburi secret-lar tələb olunur.
+
+### 1. Coolify-da resurs yaradın
+
+1. **New Resource** → **Docker Compose**
+2. Git repozitoriyanızı bağlayın (və ya manual deploy)
+3. **Docker Compose Location:** `docker-compose.prod.yml`
+4. **Base Directory:** `/` (repo kökü)
+
+### 2. Environment Variables
+
+Coolify UI-da aşağıdakıları təyin edin (nümunə: [.env.example](.env.example)):
+
+| Dəyişən | Təsvir |
+|---------|--------|
+| `POSTGRES_PASSWORD` | PostgreSQL parolu (güclü) |
+| `JWT_SECRET` | Min 32 simvol, təsadüfi |
+| `ADMIN_PASSWORD` | Admin panel giriş parolu |
+| `CORS_ORIGINS` | Admin panelin ictimai URL-i, məs. `https://admin.sizin-domain.com` |
+| `PUBLIC_URL` | API-nin ictimai URL-i; yalnız admin açıqdırsa eyni domain, məs. `https://admin.sizin-domain.com` |
+
+İstəyə bağlı: `ADMIN_USERNAME`, `READ_STRATEGY`, metrika və decision dəyişənləri.
+
+### 3. Domain bağlama
+
+| Xidmət | Port | Tövsiyə |
+|--------|------|---------|
+| **admin** | `80` | Əsas domain — panel, `/api/`, `/socket.io/`, `/api-docs`, `/health` |
+| **api** | `3000` | İstəyə bağlı ayrı subdomain (birbaşa Swagger/API) |
+
+Ən sadə ssenari: yalnız **admin** xidmətinə domain verin. Nginx API-yə daxili proksi edir; brauzer eyni origin-dən danışır.
+
+### 4. Deploy və yoxlama
+
+Deploy bitəndən sonra:
+
+- Admin panel: `https://admin.sizin-domain.com`
+- Swagger: `https://admin.sizin-domain.com/api-docs`
+- Health: `https://admin.sizin-domain.com/health`
+- Giriş: `ADMIN_USERNAME` / `ADMIN_PASSWORD`
+
+### 5. Volumelar
+
+Coolify avtomatik saxlayır: `pgdata`, `mongodata`, `redisdata`, `load_test_results`. DB məlumatı konteyner restartında qalır.
+
+### Lokal production testi
+
+```bash
+cp .env.example .env
+# .env faylını redaktə edin (POSTGRES_PASSWORD, JWT_SECRET, və s.)
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+`CORS_ORIGINS` və `PUBLIC_URL` üçün lokal testdə `http://localhost` istifadə etməyin — Coolify HTTPS domain verir. Lokal yoxlama üçün `docker-compose.yml` kifayətdir.
+
+---
+
 ## Faydalı əmrlər
 
 ```bash

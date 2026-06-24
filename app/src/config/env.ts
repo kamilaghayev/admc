@@ -93,10 +93,16 @@ export function loadEnv(): AppEnv {
     true,
   );
 
+  const isProduction = process.env.NODE_ENV === "production";
+
   const jwtSecretEnv = process.env.JWT_SECRET?.trim();
   let jwtSecret: string;
   if (jwtSecretEnv && jwtSecretEnv.length > 0) {
     jwtSecret = jwtSecretEnv;
+  } else if (isProduction) {
+    throw new Error(
+      "[env] JWT_SECRET is required in production (min 32 characters).",
+    );
   } else {
     jwtSecret =
       "dev-insecure-secret-" + Math.random().toString(36).slice(2, 12);
@@ -105,8 +111,17 @@ export function loadEnv(): AppEnv {
     );
   }
 
+  if (isProduction && jwtSecret.length < 32) {
+    throw new Error(
+      "[env] JWT_SECRET must be at least 32 characters in production.",
+    );
+  }
+
   const adminPassword = process.env.ADMIN_PASSWORD?.trim() || "admin";
   if (!process.env.ADMIN_PASSWORD?.trim()) {
+    if (isProduction) {
+      throw new Error("[env] ADMIN_PASSWORD is required in production.");
+    }
     console.warn(
       "[env] ADMIN_PASSWORD not set, defaulting to 'admin'. Override in production!",
     );

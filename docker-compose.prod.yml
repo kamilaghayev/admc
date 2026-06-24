@@ -1,0 +1,127 @@
+# Production stack — Coolify və ya istənilən Docker host üçün.
+# Coolify: "Docker Compose" resursu → bu fayl → domain-i `admin` xidmətinə (port 80) bağlayın.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-diss}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-diss}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-diss} -d ${POSTGRES_DB:-diss}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - diss
+
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - diss
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - diss
+
+  api:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      TRUST_PROXY: "true"
+      PUBLIC_URL: ${PUBLIC_URL:?PUBLIC_URL is required — e.g. https://api.example.com}
+      DATABASE_URL: postgres://${POSTGRES_USER:-diss}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-diss}
+      MONGODB_URI: mongodb://mongo:27017/${POSTGRES_DB:-diss}
+      REDIS_URL: redis://redis:6379
+      READ_STRATEGY: ${READ_STRATEGY:-race}
+      METRICS_BUFFER_SIZE: ${METRICS_BUFFER_SIZE:-500}
+      METRICS_USE_REDIS: ${METRICS_USE_REDIS:-true}
+      METRICS_QUERY_FROM_REDIS: ${METRICS_QUERY_FROM_REDIS:-true}
+      METRICS_REDIS_MAX_ENTRIES: ${METRICS_REDIS_MAX_ENTRIES:-5000}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required — e.g. https://admin.example.com}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — min 32 chars}
+      JWT_ACCESS_TTL_SEC: ${JWT_ACCESS_TTL_SEC:-900}
+      JWT_REFRESH_TTL_SEC: ${JWT_REFRESH_TTL_SEC:-604800}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      LOAD_TEST_BASE_URL: "http://127.0.0.1:3000"
+      ACCURACY_THRESHOLD: ${ACCURACY_THRESHOLD:-60}
+      LOAD_TEST_RESULTS_DIR: "/app/data/load-test-results"
+      DECISION_DEFAULT_DB: ${DECISION_DEFAULT_DB:-postgres}
+      DECISION_SAMPLE_SIZE: ${DECISION_SAMPLE_SIZE:-50}
+      DECISION_MIN_SAMPLES: ${DECISION_MIN_SAMPLES:-3}
+    volumes:
+      - load_test_results:/app/data/load-test-results
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - diss
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - diss
+
+volumes:
+  pgdata:
+  mongodata:
+  redisdata:
+  load_test_results:
+
+networks:
+  diss:
+    driver: bridge

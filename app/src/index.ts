@@ -67,6 +67,13 @@ async function main(): Promise<void> {
 
   const app = express();
 
+  if (
+    process.env.NODE_ENV === "production" ||
+    process.env.TRUST_PROXY === "true"
+  ) {
+    app.set("trust proxy", 1);
+  }
+
   const httpServer = http.createServer(app);
 
   const metricsSocket = attachMetricsSocket(httpServer, env.corsOrigins);
